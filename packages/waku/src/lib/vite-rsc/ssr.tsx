@@ -1,10 +1,20 @@
-import { type ReactNode, captureOwnerStack, use } from 'react';
+import {
+  type ReactElement,
+  type ReactNode,
+  captureOwnerStack,
+  use,
+} from 'react';
 import { createFromReadableStream } from '@vitejs/plugin-rsc/ssr';
 import type { ReactFormState } from 'react-dom/client';
 import { renderToReadableStream } from 'react-dom/server.edge';
 import { injectRSCPayload } from 'rsc-html-stream/server';
 import fallbackHtml from 'virtual:vite-rsc-waku/fallback-html';
 import { INTERNAL_ServerRoot } from '../../minimal/client.js';
+import {
+  createServerInsertedHTML,
+  makeGetServerInsertedHTML,
+} from '../../server-html/server-inserted-html.js';
+import { createHeadInsertionTransformStream } from '../../server-html/stream-transforms.js';
 import { getBootstrapPreamble } from '../utils/ssr.js';
 
 type RscElementsPayload = Record<string, unknown>;
@@ -29,6 +39,10 @@ export async function renderHTML(
   let elementsPromise: Promise<RscElementsPayload>;
   let htmlPromise: Promise<RscHtmlPayload>;
 
+  // Create the server-inserted HTML provider and renderer
+  const { ServerInsertedHTMLProvider, renderServerInsertedHTML } =
+    createServerInsertedHTML();
+
   // deserialize RSC stream back to React VDOM
   function SsrRoot() {
     // RSC stream needs to be deserialized inside SSR component.
@@ -45,9 +59,20 @@ export async function renderHTML(
     );
   }
 
-  // render html
+  let ssrElement: ReactElement = <SsrRoot />;
+
+  // Wrap with ServerInsertedHTMLProvider for CSS-in-JS support
+  ssrElement = (
+    <ServerInsertedHTMLProvider>{ssrElement}</ServerInsertedHTMLProvider>
+  );
+
   const bootstrapScriptContent = await loadBootstrapScriptContent();
-  const htmlStream = await renderToReadableStream(<SsrRoot />, {
+
+  const getServerInsertedHTML = makeGetServerInsertedHTML(
+    renderServerInsertedHTML,
+  );
+
+  const htmlStream = await renderToReadableStream(ssrElement, {
     bootstrapScriptContent:
       getBootstrapPreamble({ rscPath: options?.rscPath || '' }) +
       bootstrapScriptContent,
@@ -67,6 +92,13 @@ export async function renderHTML(
   });
 
   let responseStream: ReadableStream<Uint8Array> = htmlStream;
+
+  // Inject server-inserted HTML (CSS-in-JS styles, etc.) before </head>
+  responseStream = responseStream.pipeThrough(
+    createHeadInsertionTransformStream(getServerInsertedHTML),
+  );
+
+  // Inject RSC payload into the HTML stream
   responseStream = responseStream.pipeThrough(
     injectRSCPayload(stream2, options?.nonce ? { nonce: options?.nonce } : {}),
   );

@@ -1,5 +1,12 @@
 import { Suspense } from 'react';
+import { StyleRegistry } from '../lib/StyleRegistry';
 import { Counter } from './Counter';
+import {
+  StyledButton,
+  StyledCard,
+  StyledMessage,
+  StyledTitle,
+} from './StyledButton';
 
 const App = ({ name }: { name: string }) => {
   return (
@@ -7,18 +14,21 @@ const App = ({ name }: { name: string }) => {
       <head>
         <title>Waku</title>
       </head>
-      <body>
-        <div
-          style={{ border: '3px red dashed', margin: '1em', padding: '1em' }}
-        >
-          <h1>Hello {name}!!</h1>
-          <h3>This is a server component.</h3>
-          <Suspense fallback="Pending...">
-            <ServerMessage />
-          </Suspense>
-          <Counter />
-          <div>{new Date().toISOString()}</div>
-        </div>
+      <body style={{ background: '#f5f5f5', margin: 0, padding: '20px' }}>
+        <StyleRegistry>
+          <StyledCard>
+            <StyledTitle>Hello {name}!!</StyledTitle>
+            <h3>This is a server component.</h3>
+            <Suspense fallback="Pending...">
+              <ServerMessage />
+            </Suspense>
+            <Counter />
+            <StyledButton>Styled Button</StyledButton>
+            <div style={{ marginTop: '16px', color: '#666' }}>
+              {new Date().toISOString()}
+            </div>
+          </StyledCard>
+        </StyleRegistry>
       </body>
     </html>
   );
@@ -26,7 +36,11 @@ const App = ({ name }: { name: string }) => {
 
 const ServerMessage = async () => {
   await new Promise((resolve) => setTimeout(resolve, 2000));
-  return <p>Hello from server!</p>;
+  return (
+    <StyledMessage>
+      Hello from server! (This styled component was streamed)
+    </StyledMessage>
+  );
 };
 
 export default App;
